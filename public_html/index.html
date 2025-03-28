@@ -1,0 +1,91 @@
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <title>Load average monitor</title>
+    </head>
+    <body>
+	<div class="chart-container" style="position: relative; height: 95vh; width: 95vw">
+            <canvas id="loadavg"></canvas>
+	</div>
+
+        <script>
+            const updateInterval = 5; // in seconds
+            const dataSize = (60 / updateInterval) * 60 * 24; 
+
+            var ctx = document.getElementById('loadavg');
+            var ds1 = [];
+            var ds5 = [];
+            var ds15 = [];
+            var labels = []
+            
+            var chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '1m',
+                        data: ds1,
+			backgroundColor: 'rgba(255, 0, 0, 1)',
+			borderColor:     'rgba(255, 0, 0, 1)',
+                    }, {
+                        label: '5m',
+                        data: ds5,
+			backgroundColor: 'rgba(255, 184, 28, 1)',
+			borderColor:     'rgba(255, 184, 28, 1)',
+                    }, {
+                        label: '15m',
+                        data: ds15,
+			backgroundColor: 'rgba(0, 255, 0, 1)',
+			borderColor:     'rgba(0, 255, 0, 1)',
+                    }]
+                }
+            });
+
+            chart.options.animation = false;
+            chart.options.elements.point.radius = 0;
+            chart.options.maintainAspectRatio = false;
+            chart.options.responsive = true;
+
+            function addData(chart, label, newData) {
+                chart.data.labels.push(label);
+                chart.data.datasets.forEach((dataset, i) => {
+                    dataset.data.push(newData[i]);
+                });
+                chart.update();
+            }
+
+            function removeData(chart) {
+		chart.data.labels.shift();
+		chart.data.datasets.forEach((dataset) => {
+		    dataset.data.shift();
+		});
+		chart.update();
+	    }
+
+            async function reloadAvg() {
+                try {
+                    const response = await
+                        fetch("http://192.168.10.20:7999/loadavg");
+                    if (!response.ok) {
+                        throw new Error(`Response status: ${response.status}`);
+                    }
+                    const json = await response.json();
+                    addData(chart, json.date, json.avg);
+		    if (chart.data.labels.length > dataSize) {
+                        removeData(chart);
+		    }
+                } catch (error) {
+                    console.error(error.message);
+                }
+                setTimeout(reloadAvg, updateInterval * 1000);
+            }
+
+            setTimeout(reloadAvg, updateInterval * 1000);
+
+        </script>
+
+    </body>
+</html>
+
