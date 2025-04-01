@@ -35,15 +35,13 @@ proc wapp-page-update {} {
 }
 
 proc wapp-page-last {} {
-
     set last [lindex [db eval {
-	SELECT '{"date": "' || datetime(dt,'auto') ||
-	       '", "avg": [' || la1 || ', ' || la2 || ', ' || la3 || ']}'
-	FROM loadavg
-	ORDER BY dt DESC LIMIT 1
+        SELECT '{"date": "' || strftime('%Y-%m-%d %H:%M:%S', dt,'unixepoch') ||
+            '", "avg": [' || la1 || ', ' || la2 || ', ' || la3 || ']}'
+          FROM loadavg
+         ORDER BY dt DESC LIMIT 1
     }] 0]
     wapp-mimetype application/json
-    set date [clock format [clock seconds] -format {%H:%M:%S}]
     wapp $last\n
 }
 
@@ -52,25 +50,25 @@ proc wapp-page-dump {} {
     wapp-allow-xorigin-params
     set days [wapp-param days]
     if {![string is integer -strict $days]} {
-	set days 1
+        set days 1
     }
 
     if {$days > $::intervalDays} {
-	set days $::intervalDays
+        set days $::intervalDays
     }
     
-    set i "-$days minutes"
+    set i [expr {60 * 60 * 24 * $days}]
 
     wapp-mimetype application/json
     wapp \[\n
     db eval {
-	SELECT '{"date": "' || datetime(dt,'auto') ||
-	       '", "avg": [' || la1 || ', ' || la2 || ', ' || la3 || ']}' AS json
-	FROM loadavg
-	WHERE dt >= unixepoch('now','localtime', :i)
-	ORDER BY dt ASC
+        SELECT '{"date": "' || strftime("%Y-%m-%d %H:%M:%S", dt,"unixepoch") ||
+            '", "avg": [' || la1 || ', ' || la2 || ', ' || la3 || ']}' AS json
+          FROM loadavg
+         WHERE dt >= strftime('%s','now') - :i
+         ORDER BY dt ASC
     } r {
-	wapp $r(json),\n
+        wapp $r(json),\n
     }
     wapp "{}\n]\n"
 }
@@ -93,7 +91,7 @@ proc initDB {} {
 proc cleanupAVG {} {
     set older [expr {60 * 60 * 24 * $::intervalDays}]
     db eval {
-	DELETE FROM loadavg WHERE dt < unixepoch('now') - :older
+        DELETE FROM loadavg WHERE dt < strftime('%s','now') - :older
     }
 }
 
@@ -102,8 +100,8 @@ proc updateDB {} {
     seek $::loadAvgChan 0
     lassign [read $::loadAvgChan] a b c _
     db eval {
-	INSERT INTO loadavg (dt, la1, la2, la3)
-	VALUES (unixepoch('now','localtime'), :a, :b, :c);
+        INSERT INTO loadavg (dt, la1, la2, la3)
+        VALUES (strftime('%s','now'), :a, :b, :c);
     }
 
     after [expr {$::updateInterval * 1000}] [info level 0]
