@@ -11,37 +11,61 @@ set updateInterval 10; # in seconds
 set intervalDays 7; # save data for this number of days
 set loadAvgChan [open /proc/loadavg r]
 
-set docRoot [file join [file dirname [file normalize [info script]]] public_html]
+set DOC_ROOT [file join [file dirname [file normalize [info script]]] public_html]
 
 
-proc wapp-default {} {
-    variable docRoot
-    wapp-content-security-policy {default_src 'self' 'unsafe-inline'}
-    set f [open [file join $docRoot index.html] r]
+proc wapp-return-file {filename {encoding utf-8}} {
+    set f [open $filename r]
+    fconfigure $f -encoding $encoding; # -translation binary
     wapp [read $f]
     close $f
 }
 
 
+proc wapp-default {} {
+    wapp-mimetype "text/html; charset=utf-8"
+    wapp-return-file [file join $::DOC_ROOT index.html]
+}
+
+
+proc wapp-page-style.css {} {
+    wapp-mimetype "text/css; charset=utf-8"
+    wapp-return-file [file join $::DOC_ROOT style.css]
+}
+
+
+proc wapp-page-script.js {} {
+    wapp-mimetype "text/javascript"
+    wapp-return-file [file join $::DOC_ROOT script.js]
+}
+
+
+proc wapp-page-chart.js {} {
+    wapp-mimetype "text/javascript"
+    wapp-return-file [file join $::DOC_ROOT chart.js]
+}
+
+
 proc wapp-page-days {} {
-    wapp-mimetype application/json
+    wapp-mimetype text/json
     wapp $::intervalDays
 }
 
 
 proc wapp-page-update {} {
-    wapp-mimetype application/json
+    wapp-mimetype text/json
     wapp $::updateInterval
 }
 
+
 proc wapp-page-last {} {
     set last [lindex [db eval {
-        SELECT '{"date": "' || strftime('%Y-%m-%d %H:%M:%S', dt,'unixepoch') ||
+        SELECT '{"date": "' || strftime('%Y-%m-%d %H:%M:%S', dt,'unixepoch','localtime') ||
             '", "avg": [' || la1 || ', ' || la2 || ', ' || la3 || ']}'
           FROM loadavg
          ORDER BY dt DESC LIMIT 1
     }] 0]
-    wapp-mimetype application/json
+    wapp-mimetype text/json
     wapp $last\n
 }
 
@@ -59,10 +83,10 @@ proc wapp-page-dump {} {
     
     set i [expr {60 * 60 * 24 * $days}]
 
-    wapp-mimetype application/json
+    wapp-mimetype text/json
     wapp \[\n
     db eval {
-        SELECT '{"date": "' || strftime("%Y-%m-%d %H:%M:%S", dt,"unixepoch") ||
+        SELECT '{"date": "' || strftime("%Y-%m-%d %H:%M:%S", dt,'unixepoch', 'localtime') ||
             '", "avg": [' || la1 || ', ' || la2 || ', ' || la3 || ']}' AS json
           FROM loadavg
          WHERE dt >= strftime('%s','now') - :i
@@ -112,7 +136,7 @@ initDB
 updateDB
 
 wapp-start [list -server [lindex $argv 0]]
-#vwait forever
+
 
 close $loadAvgChan
 
